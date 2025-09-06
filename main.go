@@ -175,7 +175,7 @@ func urlToFilename(rawURL string) string {
 	ext := getFileExtension(lowercaseURL)         // Get file extension (e.g., .pdf or .zip)
 	baseFilename := getFileNameOnly(lowercaseURL) // Extract base file name
 
-	nonAlphanumericRegex := regexp.MustCompile(`[^a-z0-9]+`)                 // Match everything except a-z and 0-9
+	nonAlphanumericRegex := regexp.MustCompile(`[^a-z]+`)                    // Match everything except a-z and 0-9 `[^a-z0-9]+`
 	safeFilename := nonAlphanumericRegex.ReplaceAllString(baseFilename, "_") // Replace invalid chars
 
 	collapseUnderscoresRegex := regexp.MustCompile(`_+`)                        // Collapse multiple underscores into one
@@ -221,60 +221,64 @@ func fileExists(filename string) bool {
 }
 
 // Downloads and writes a PDF file from the URL to the specified directory
-func downloadPDF(finalURL, outputDir string) bool {
-	filename := strings.ToLower(urlToFilename(finalURL)) // Generate sanitized filename
-	filePath := filepath.Join(outputDir, filename)       // Build full path
+func downloadPDF(initialURL, outputDir string) bool { // Function takes a starting URL and output directory, returns true/false for success
 
-	if fileExists(filePath) { // Skip if already downloaded
-		log.Printf("File already exists, skipping: %s", filePath)
-		return false
+	client := &http.Client{Timeout: 3 * time.Minute} // Create HTTP client with a 3-minute timeout for long downloads
+
+	resp, err := client.Get(initialURL) // Send HTTP GET request to the provided initial URL
+	if err != nil {                     // Check if request failed (e.g., network error, timeout, invalid URL)
+		log.Printf("Failed to download %s: %v", initialURL, err) // Log the failure
+		return false                                             // Exit with failure
+	}
+	defer resp.Body.Close() // Ensure the response body is closed when function exits
+
+	// Get the final redirected URL after following HTTP redirects
+	finalURL := resp.Request.URL.String()                           // Extract the final resolved URL
+	log.Printf("Final URL resolved: %s → %s", initialURL, finalURL) // Log redirection from initial → final
+
+	if resp.StatusCode != http.StatusOK { // Ensure HTTP response is 200 OK
+		log.Printf("Download failed for %s: %s", finalURL, resp.Status) // Log error if status is not OK
+		return false                                                    // Exit with failure
+	}
+	filename := strings.ToLower(urlToFilename(finalURL)) // Convert final URL to a sanitized lowercase filename
+	filePath := filepath.Join(outputDir, filename)       // Build the full output file path
+
+	if fileExists(filePath) { // Check if the file already exists locally
+		log.Printf("File already exists, skipping: %s", filePath) // Log skip message
+		return false                                              // Skip download
 	}
 
-	client := &http.Client{Timeout: 3 * time.Minute} // Create HTTP client with 3-minute timeout to avoid hanging
-
-	resp, err := client.Get(finalURL) // Perform HTTP GET request to download the file
-	if err != nil {                   // Check if an error occurred during request
-		log.Printf("Failed to download %s: %v", finalURL, err) // Log the error with context
-		return false                                           // Exit function if request failed
-	}
-	defer resp.Body.Close() // Ensure the response body is closed after reading
-
-	if resp.StatusCode != http.StatusOK { // Check for HTTP 200 OK status
-		log.Printf("Download failed for %s: %s", finalURL, resp.Status) // Log failure reason
-		return false                                                    // Exit if status is not OK
+	contentType := resp.Header.Get("Content-Type")         // Get the response Content-Type header
+	if !strings.Contains(contentType, "application/pdf") { // Verify the content is a PDF
+		log.Printf("Invalid content type for %s: %s (expected application/pdf)", finalURL, contentType) // Log mismatch
+		return false                                                                                    // Exit if not a PDF
 	}
 
-	contentType := resp.Header.Get("Content-Type")         // Retrieve the content type from HTTP headers
-	if !strings.Contains(contentType, "application/pdf") { // Ensure it's a PDF
-		log.Printf("Invalid content type for %s: %s (expected application/pdf)", finalURL, contentType)
-		return false // Skip if it's not a PDF
+	var buf bytes.Buffer                     // Create an in-memory buffer to hold PDF data
+	written, err := io.Copy(&buf, resp.Body) // Copy the response body into the buffer
+	if err != nil {                          // Check if copy failed (e.g., network interruption)
+		log.Printf("Failed to read PDF data from %s: %v", finalURL, err) // Log error
+		return false                                                     // Exit with failure
+	}
+	if written == 0 { // Check if no bytes were written (empty file)
+		log.Printf("Downloaded 0 bytes for %s; not creating file", finalURL) // Log warning
+		return false                                                         // Exit without creating file
 	}
 
-	var buf bytes.Buffer                     // Create buffer to temporarily hold the file data
-	written, err := io.Copy(&buf, resp.Body) // Copy response body into buffer
-	if err != nil {                          // Handle error while reading response
-		log.Printf("Failed to read PDF data from %s: %v", finalURL, err)
-		return false
+	out, err := os.Create(filePath) // Create the file on disk
+	if err != nil {                 // Handle file creation error (e.g., permission denied)
+		log.Printf("Failed to create file for %s: %v", finalURL, err) // Log error
+		return false                                                  // Exit with failure
 	}
-	if written == 0 { // If nothing was read (empty file)
-		log.Printf("Downloaded 0 bytes for %s; not creating file", finalURL)
-		return false
+	defer out.Close() // Ensure file is properly closed when done
+
+	if _, err := buf.WriteTo(out); err != nil { // Write buffer contents (PDF data) to file
+		log.Printf("Failed to write PDF to file for %s: %v", finalURL, err) // Log write error
+		return false                                                        // Exit with failure
 	}
 
-	out, err := os.Create(filePath) // Create file on disk at the specified location
-	if err != nil {                 // Handle file creation error
-		log.Printf("Failed to create file for %s: %v", finalURL, err)
-		return false
-	}
-	defer out.Close() // Ensure file is closed after writing
-
-	if _, err := buf.WriteTo(out); err != nil { // Write buffer contents to file
-		log.Printf("Failed to write PDF to file for %s: %v", finalURL, err)
-		return false
-	}
-
-	log.Printf("Successfully downloaded %d bytes: %s → %s", written, finalURL, filePath) // Log successful download
-	return true                                                                          // Return success
+	log.Printf("Successfully downloaded %d bytes: %s → %s", written, finalURL, filePath) // Log success
+	return true                                                                          // Indicate success
 }
 
 // Checks if a directory exists at the given path

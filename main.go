@@ -194,7 +194,7 @@ func urlToFilename(rawURL string) string {
 	ext := getFileExtension(lowercaseURL)         // Get file extension (e.g., .pdf or .zip)
 	baseFilename := getFileNameOnly(lowercaseURL) // Extract base file name
 
-	nonAlphanumericRegex := regexp.MustCompile(`[^a-z]+`)                    // Match everything except a-z and 0-9 `[^a-z0-9]+`
+	nonAlphanumericRegex := regexp.MustCompile(`[^a-z0-9]+`)                    // Match everything except a-z and 0-9
 	safeFilename := nonAlphanumericRegex.ReplaceAllString(baseFilename, "_") // Replace invalid chars
 
 	collapseUnderscoresRegex := regexp.MustCompile(`_+`)                        // Collapse multiple underscores into one
@@ -215,6 +215,12 @@ func urlToFilename(rawURL string) string {
 	}
 
 	safeFilename = safeFilename + ext // Add the proper file extension
+
+	// SECURITY FIX: Ensure filename does not contain path separators or parent dir reference
+	if strings.Contains(safeFilename, "/") || strings.Contains(safeFilename, "\\") || strings.Contains(safeFilename, "..") {
+		log.Printf("Blocked unsafe filename derived from URL: %q → %q", rawURL, safeFilename)
+		return "invalid.pdf"
+	}
 
 	return safeFilename // Return the final sanitized filename
 }

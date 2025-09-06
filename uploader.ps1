@@ -3,6 +3,9 @@
 
 while ($true) {
     Write-Host "Starting git cycle at $(Get-Date)" -ForegroundColor Cyan
+
+    # Pull the latest changes from the remote
+    git pull
     
     # Stage all changes
     git add .

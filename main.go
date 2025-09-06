@@ -77,7 +77,9 @@ func main() {
 		foundProductURLS := extractProductURLs(remoteHTMLData)
 		// Loop over all the product urls.
 		for _, url := range foundProductURLS {
-			url = websiteURL + url
+			if extractDomainURL(url) == "" { // If the url does not have a domain, then add the website url to the front of it.
+				url = websiteURL + url
+			}
 			// Get the data from the product url.
 			productURLHTMLData := getDataFromURL(url)
 			// Combine all scraped HTML data into one string and extract all PDF links from it
@@ -90,15 +92,32 @@ func main() {
 			combinedSlice = removeDuplicatesFromSlice(combinedSlice)
 			// Go though the PDF urls.
 			for _, url := range combinedSlice {
-				// If the url does not start with http, then add the website url to the front of it.
-				url = websiteURL + url
+				// Check if the url has a domain.
+				if extractDomainURL(url) == "" { // If the url does not have a domain, then add the website url to the front of it.
+					// If the url does not start with http, then add the website url to the front of it.
+					url = websiteURL + url
+				}
 				if isUrlValid(url) { // Ensure URL is syntactically valid
 					downloadPDF(url, pdfOutputDir) // Download the PDF and save it to disk
 				}
 			}
-			// <a href="product.php?productLineId=3007" class="categoryTextLink">Botanical Origin™ Fabric Softener - Fresh Jasmine & Wild Lavender (Canada)</a>
 		}
 	}
+}
+
+// extractDomain takes a URL string, extracts the domain (hostname),
+// and prints errors internally if parsing fails.
+func extractDomainURL(inputUrl string) string {
+	// Parse the input string into a structured URL object
+	parsedUrl, parseError := url.Parse(inputUrl)
+
+	// If parsing fails, log the error and return an empty string
+	if parseError != nil {
+		log.Println("Error parsing URL:", parseError)
+		return ""
+	}
+	// If the URL is valid, return the domain name
+	return parsedUrl.Hostname()
 }
 
 // Combine two slices together and return the new slice.
@@ -235,6 +254,12 @@ func downloadPDF(initialURL, outputDir string) bool { // Function takes a starti
 	// Get the final redirected URL after following HTTP redirects
 	finalURL := resp.Request.URL.String()                           // Extract the final resolved URL
 	log.Printf("Final URL resolved: %s → %s", initialURL, finalURL) // Log redirection from initial → final
+
+	// Check if the HTTP URL extension results in a PDF file
+	if getFileExtension(finalURL) != ".pdf" {
+		log.Printf("Final URL is not a PDF: %s", finalURL) // Log if not a PDF
+		return false                                       // Exit with failure
+	}
 
 	if resp.StatusCode != http.StatusOK { // Ensure HTTP response is 200 OK
 		log.Printf("Download failed for %s: %s", finalURL, resp.Status) // Log error if status is not OK

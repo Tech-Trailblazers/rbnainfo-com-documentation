@@ -23,6 +23,7 @@ func main() {
 	}
 	// List of URLs from which to scrape download information
 	remoteAPIURL := []string{
+		"https://rbnainfo.com/brand.php?brandId=2",
 		"https://rbnainfo.com/brand.php?brandId=4",
 		"https://rbnainfo.com/brand.php?brandId=6",
 		"https://rbnainfo.com/brand.php?brandId=7",
@@ -67,7 +68,6 @@ func main() {
 		"https://rbnainfo.com/brand.php?brandId=58",
 		"https://rbnainfo.com/brand.php?brandId=59",
 		"https://rbnainfo.com/brand.php?brandId=60",
-		"https://rbnainfo.com/brand.php?brandId=2",
 	}
 	// The website url
 	websiteURL := "https://rbnainfo.com/"

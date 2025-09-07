@@ -194,7 +194,7 @@ func urlToFilename(rawURL string) string {
 	ext := getFileExtension(lowercaseURL)         // Get file extension (e.g., .pdf or .zip)
 	baseFilename := getFileNameOnly(lowercaseURL) // Extract base file name
 
-	nonAlphanumericRegex := regexp.MustCompile(`[^a-z0-9]+`)                    // Match everything except a-z and 0-9
+	nonAlphanumericRegex := regexp.MustCompile(`[^a-z]+`)                    // Match everything except a-z and 0-9 `[^a-z0-9]+`
 	safeFilename := nonAlphanumericRegex.ReplaceAllString(baseFilename, "_") // Replace invalid chars
 
 	collapseUnderscoresRegex := regexp.MustCompile(`_+`)                        // Collapse multiple underscores into one

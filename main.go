@@ -266,6 +266,11 @@ func downloadPDF(initialURL, outputDir string) bool { // Function takes a starti
 		return false                                                    // Exit with failure
 	}
 	filename := strings.ToLower(urlToFilename(finalURL)) // Convert final URL to a sanitized lowercase filename
+	// Validate that filename cannot escape the intended directory
+	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
+		log.Printf("Unsafe filename derived from URL: %s", filename)
+		return false // Do not proceed if unsafe
+	}
 	filePath := filepath.Join(outputDir, filename)       // Build the full output file path
 
 	if fileExists(filePath) { // Check if the file already exists locally
